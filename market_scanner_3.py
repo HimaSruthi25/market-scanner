@@ -7,8 +7,11 @@ warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
 import streamlit as st
 import pandas as pd
 import numpy as np
-import yfinance as yf
-import pandas_ta as ta  # Replaced talib with pandas_ta
+import yfinance as yf 
+import ta
+from ta.momentum import RSIIndicator
+from ta.trend import SMAIndicator
+from ta.volume import VolumeWeightedAveragePrice
 import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.express as px
@@ -180,8 +183,8 @@ def get_stock_data(tickers, start_date, end_date):
 def ma50_score(df):
     if len(df) < 200:
         return 0.0
-    ma50_series = ta.sma(df['Close'], length=50)
-    ma200_series = ta.sma(df['Close'], length=200)
+    ma50_series = SMAIndicator(close=df['Close'], window=50).sma_indicator()
+    ma200_series = SMAIndicator(close=df['Close'], window=200).sma_indicator()
     if pd.isna(ma50_series.iloc[-1]) or pd.isna(ma200_series.iloc[-1]):
         return 0.0
     ma50 = ma50_series.iloc[-1]
@@ -205,7 +208,7 @@ def ma50_score(df):
 def rsi_score_momentum(df, rsi_period=14, lookback=20):
     if len(df) < rsi_period + lookback:
         return 0.0
-    rsi_series = ta.rsi(df['Close'], length=rsi_period)
+    rsi_series = RSIIndicator(close=df['Close'], window=rsi_period).rsi()
     rsi_change = rsi_series.diff()
     change = rsi_change.iloc[-1]
     stdev = rsi_change.rolling(lookback).std().iloc[-1]
@@ -392,4 +395,5 @@ with right_column:
                 format_func=lambda x: ticker_to_name[x]
             )
             if selected_raw_ticker in data.columns:
+
                 st.dataframe(data[selected_raw_ticker].tail(10))
