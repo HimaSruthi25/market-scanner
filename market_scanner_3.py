@@ -20,6 +20,8 @@ import datetime as dt
 import json
 import requests
 import time
+# The nsetools library is no longer needed with this new approach
+# from nsetools import Nse 
 
 # NOTE: The API key for the Gemini API is intentionally left as an empty string.
 # The Canvas environment will automatically handle the API key for the fetch call.
@@ -119,43 +121,48 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# --- Master Tickers List & Company Names Mapping ---
-nifty50_tickers = [
-    "ADANIENT.NS", "ADANIPORTS.NS", "APOLLOHOSP.NS", "ASIANPAINT.NS", "AXISBANK.NS",
-    "BAJAJ-AUTO.NS", "BAJFINANCE.NS", "BAJAJFINSV.NS", "BHARTIARTL.NS", "BPCL.NS",
-    "BRITANNIA.NS", "CIPLA.NS", "COALINDIA.NS", "DIVISLAB.NS", "DRREDDY.NS",
-    "EICHERMOT.NS", "GRASIM.NS", "HCLTECH.NS", "HDFCBANK.NS", "HDFCLIFE.NS",
-    "HEROMOTOCO.NS", "HINDALCO.NS", "HINDUNILVR.NS", "ICICIBANK.NS", "INDUSINDBK.NS",
-    "INFY.NS", "ITC.NS", "JSWSTEEL.NS", "KOTAKBANK.NS", "LT.NS",
-    "LTIM.NS", "M&M.NS", "MARUTI.NS", "NESTLEIND.NS", "NTPC.NS",
-    "ONGC.NS", "POWERGRID.NS", "RELIANCE.NS", "SBILIFE.NS", "SBIN.NS",
-    "SUNPHARMA.NS", "TCS.NS", "TATACONSUM.NS", "TATAMOTORS.NS", "TATASTEEL.NS",
-    "TECHM.NS", "TITAN.NS", "ULTRACEMCO.NS", "WIPRO.NS", "ZEEL.NS"
-]
+# --- NEW: Dynamic Tickers and Company Names Fetching using official NSE CSVs ---
+@st.cache_data(ttl=3600 * 6) # Cache for 6 hours to reduce network calls
+def get_nifty_indices_data():
+    """
+    Fetches real-time Nifty 50 and Nifty 100 stock data from official NSE CSVs.
+    This approach is much more robust and reliable than web scraping.
+    """
+    nifty50_url = "https://archives.nseindia.com/content/indices/ind_nifty50list.csv"
+    nifty100_url = "https://archives.nseindia.com/content/indices/ind_nifty100list.csv"
+    
+    ticker_to_name = {}
+    nifty50_tickers = []
+    nifty100_tickers = []
 
-ticker_to_name = {
-    # Nifty 50 Tickers
-    "ADANIENT.NS": "Adani Enterprises", "ADANIPORTS.NS": "Adani Ports", "APOLLOHOSP.NS": "Apollo Hospitals",
-    "ASIANPAINT.NS": "Asian Paints", "AXISBANK.NS": "Axis Bank", "BAJAJ-AUTO.NS": "Bajaj Auto",
-    "BAJFINANCE.NS": "Bajaj Finance", "BAJAJFINSV.NS": "Bajaj Finserv", "BHARTIARTL.NS": "Bharti Airtel",
-    "BPCL.NS": "BPCL", "BRITANNIA.NS": "Britannia", "CIPLA.NS": "Cipla",
-    "COALINDIA.NS": "Coal India", "DIVISLAB.NS": "Divi's Laboratories", "DRREDDY.NS": "Dr Reddy's Laboratories",
-    "EICHERMOT.NS": "Eicher Motors", "GRASIM.NS": "Grasim Industries", "HCLTECH.NS": "HCL Technologies",
-    "HDFCBANK.NS": "HDFC Bank", "HDFCLIFE.NS": "HDFC Life Insurance", "HEROMOTOCO.NS": "Hero MotoCorp",
-    "HINDALCO.NS": "Hindalco", "HINDUNILVR.NS": "Hindustan Unilever", "ICICIBANK.NS": "ICICI Bank",
-    "INDUSINDBK.NS": "IndusInd Bank", "INFY.NS": "Infosys", "ITC.NS": "ITC Ltd",
-    "JSWSTEEL.NS": "JSW Steel", "KOTAKBANK.NS": "Kotak Mahindra Bank", "LT.NS": "Larsen & Toubro",
-    "LTIM.NS": "LTI Mindtree", "M&M.NS": "Mahindra & Mahindra", "MARUTI.NS": "Maruti Suzuki",
-    "NESTLEIND.NS": "Nestle India", "NTPC.NS": "NTPC", "ONGC.NS": "ONGC",
-    "POWERGRID.NS": "Power Grid Corporation", "RELIANCE.NS": "Reliance Industries", "SBILIFE.NS": "SBI Life Insurance",
-    "SBIN.NS": "State Bank of India", "SUNPHARMA.NS": "Sun Pharma", "TCS.NS": "TCS",
-    "TATACONSUM.NS": "Tata Consumer Products", "TATAMOTORS.NS": "Tata Motors", "TATASTEEL.NS": "Tata Steel",
-    "TECHM.NS": "Tech Mahindra", "TITAN.NS": "Titan", "ULTRACEMCO.NS": "UltraTech Cement",
-    "WIPRO.NS": "Wipro", "ZEEL.NS": "Zee Entertainment"
-}
+    try:
+        # Fetch Nifty 50 data from official CSV
+        nifty50_df = pd.read_csv(nifty50_url)
+        nifty50_tickers = [symbol + '.NS' for symbol in nifty50_df['Symbol'].tolist()]
+        for _, row in nifty50_df.iterrows():
+            ticker_to_name[row['Symbol'] + '.NS'] = row['Company Name']
 
-master_tickers = sorted(ticker_to_name.keys())
-master_names = sorted(ticker_to_name.values())
+        # Fetch Nifty 100 data from official CSV
+        nifty100_df = pd.read_csv(nifty100_url)
+        nifty100_tickers = [symbol + '.NS' for symbol in nifty100_df['Symbol'].tolist()]
+        for _, row in nifty100_df.iterrows():
+            ticker_to_name[row['Symbol'] + '.NS'] = row['Company Name']
+
+    except Exception as e:
+        st.error(f"Error fetching data from NSE archives: {e}")
+        return [], [], {}
+
+    # The Nifty 100 list includes the Nifty 50, so we can combine and deduplicate.
+    master_tickers = sorted(list(set(nifty50_tickers + nifty100_tickers)))
+    
+    return nifty50_tickers, nifty100_tickers, ticker_to_name
+
+# Fetch the data and populate global variables
+with st.spinner("Fetching the latest Nifty 50 and Nifty 100 stock lists..."):
+    nifty50_tickers, nifty100_tickers, ticker_to_name = get_nifty_indices_data()
+
+master_tickers = sorted(list(set(nifty50_tickers + nifty100_tickers)))
+master_names = sorted([ticker_to_name.get(t, t.split('.')[0]) for t in master_tickers])
 name_to_ticker = {v: k for k, v in ticker_to_name.items()}
 
 # --- Data Download Function (cached) ---
@@ -261,10 +268,11 @@ def compute_scores(data_frame, selected_tickers):
     return pd.DataFrame(results).sort_values('Final Score', ascending=False).reset_index(drop=True)
 
 # --- Function to call the LLM API and get JSON response ---
-@st.cache_data(ttl=3600*4, show_spinner=False) # Cache the LLM response for 4 hours and disable the default spinner
+@st.cache_data(ttl=3600*4) # Cache the LLM response for 4 hours
 def get_llm_summary(prompt, retry_count=3, backoff_factor=1.0):
     if not API_KEY:
-        return {"error": "API key not provided. AI summary is unavailable."}
+        st.info("API key is not configured. The AI-powered summary will not be available.")
+        return {"error": "API key not provided"}
 
     headers = {'Content-Type': 'application/json'}
     payload = {
@@ -295,20 +303,11 @@ def get_llm_summary(prompt, retry_count=3, backoff_factor=1.0):
             
             if 'candidates' in result and result['candidates']:
                 json_string = result['candidates'][0]['content']['parts'][0]['text']
-                # Clean up the JSON string to handle common formatting issues
                 json_string = json_string.strip().lstrip('```json').rstrip('```')
                 
-                # Attempt to parse the JSON
-                try:
-                    return json.loads(json_string)
-                except json.JSONDecodeError as e:
-                    # If parsing fails, it means the LLM didn't return valid JSON.
-                    # This is likely the cause of the "huge summary" issue.
-                    # We'll return a clear error message instead.
-                    return {"error": f"The AI failed to generate a summary in the correct format. The raw response could not be parsed: {e}"}
-
+                return json.loads(json_string)
             else:
-                return {"error": "The AI could not generate a summary. The model response was empty or malformed."}
+                return {"error": "Could not generate a summary. The model response was empty or malformed."}
         
         except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
             if i < retry_count - 1:
@@ -334,7 +333,7 @@ with left_column:
                 options=master_names,
                 default=[] 
             )
-            selected_tickers = [name_to_ticker[name] for name in selected_names]
+            selected_tickers = [name_to_ticker.get(name) for name in selected_names if name_to_ticker.get(name)]
 
             today = dt.date.today()
             default_start_date = today - dt.timedelta(days=365)
@@ -355,25 +354,25 @@ with left_column:
                     st.error("The end date cannot be in the future. Please select a date on or before today.")
                     st.stop()
     
-    if run_analysis and not selected_tickers:
-        st.warning("Please select at least one stock.")
+if run_analysis and not selected_tickers:
+    st.warning("Please select at least one stock.")
+    st.stop()
+elif run_analysis and selected_tickers:
+    data = get_stock_data(selected_tickers, start_date, end_date)
+    
+    if data.empty:
+        st.error("No data available for selected period.")
         st.stop()
-    elif run_analysis and selected_tickers:
-        data = get_stock_data(selected_tickers, start_date, end_date)
-        
-        if data.empty:
-            st.error("No data available for selected period.")
-            st.stop()
-        
-        scanner_df = compute_scores(data, selected_tickers)
-        
-        if scanner_df.empty:
-            st.warning("Not enough data for analysis (need min 200 days).")
-            st.stop()
-        
-        st.session_state['scanner_df'] = scanner_df
-        st.session_state['selected_tickers'] = selected_tickers
-        st.session_state['data'] = data
+    
+    scanner_df = compute_scores(data, selected_tickers)
+    
+    if scanner_df.empty:
+        st.warning("Not enough data for analysis (need min 200 days).")
+        st.stop()
+    
+    st.session_state['scanner_df'] = scanner_df
+    st.session_state['selected_tickers'] = selected_tickers
+    st.session_state['data'] = data
     
 if 'scanner_df' in st.session_state and not st.session_state['scanner_df'].empty:
     scanner_df = st.session_state['scanner_df']
@@ -392,7 +391,7 @@ if 'scanner_df' in st.session_state and not st.session_state['scanner_df'].empty
                 for _, row in top_3.iterrows():
                     with st.container(border=True):
                         st.markdown(f"**{row['Company Name']}** <span class='positive-score'>{row['Final Score']:.2f}</span>", 
-                                     unsafe_allow_html=True)
+                                    unsafe_allow_html=True)
         
         with bottom_col:
             st.markdown("### 🔻 Bottom 3")
@@ -401,7 +400,7 @@ if 'scanner_df' in st.session_state and not st.session_state['scanner_df'].empty
                 for _, row in bottom_3.iterrows():
                     with st.container(border=True):
                         st.markdown(f"**{row['Company Name']}** <span class='negative-score'>{row['Final Score']:.2f}</span>", 
-                                     unsafe_allow_html=True)
+                                    unsafe_allow_html=True)
 
         # Heatmap Visualization
         st.markdown("## 🔥 Stock Scanner Heatmap")
@@ -437,7 +436,7 @@ if 'scanner_df' in st.session_state and not st.session_state['scanner_df'].empty
             selected_raw_ticker = st.selectbox(
                 "Select stock:",
                 options=selected_tickers,
-                format_func=lambda x: ticker_to_name[x]
+                format_func=lambda x: ticker_to_name[x] if x in ticker_to_name else x
             )
             if selected_raw_ticker in data.columns:
                 st.dataframe(data[selected_raw_ticker].tail(10))
@@ -466,7 +465,7 @@ if 'scanner_df' in st.session_state and not st.session_state['scanner_df'].empty
 
                 Please provide a response in JSON format only, with the following schema:
                 {{
-                    "summary": "A brief, one-paragraph overview of the stock's performance. KEEP THE SUMMARY CONCISE.",
+                    "summary": "A brief, one-paragraph overview of the stock's performance.",
                     "key_points": [
                         "A bullet point describing the MA50 trend.",
                         "A bullet point describing the RSI momentum.",
@@ -481,7 +480,6 @@ if 'scanner_df' in st.session_state and not st.session_state['scanner_df'].empty
                 - RSI Score (momentum): {selected_row['RSI Score']:.2f} (from -1 to 1)
                 - Volume Score (volume strength): {selected_row['Volume Score']:.2f} (from -1 to 1)
 
-                Strictly follow the JSON schema and provide a concise summary.
                 Do not include any other text or markdown.
                 """
                 with st.spinner("Generating summary and visuals..."):
