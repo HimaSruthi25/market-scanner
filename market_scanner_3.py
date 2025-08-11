@@ -261,11 +261,10 @@ def compute_scores(data_frame, selected_tickers):
     return pd.DataFrame(results).sort_values('Final Score', ascending=False).reset_index(drop=True)
 
 # --- Function to call the LLM API and get JSON response ---
-@st.cache_data(ttl=3600*4) # Cache the LLM response for 4 hours
+@st.cache_data(ttl=3600*4, show_spinner=False) # Cache the LLM response for 4 hours and disable the default spinner
 def get_llm_summary(prompt, retry_count=3, backoff_factor=1.0):
     if not API_KEY:
-        st.info("API key is not configured. The AI-powered summary will not be available.")
-        return {"error": "API key not provided"}
+        return {"error": "API key not provided. AI summary is unavailable."}
 
     headers = {'Content-Type': 'application/json'}
     payload = {
@@ -296,11 +295,20 @@ def get_llm_summary(prompt, retry_count=3, backoff_factor=1.0):
             
             if 'candidates' in result and result['candidates']:
                 json_string = result['candidates'][0]['content']['parts'][0]['text']
+                # Clean up the JSON string to handle common formatting issues
                 json_string = json_string.strip().lstrip('```json').rstrip('```')
                 
-                return json.loads(json_string)
+                # Attempt to parse the JSON
+                try:
+                    return json.loads(json_string)
+                except json.JSONDecodeError as e:
+                    # If parsing fails, it means the LLM didn't return valid JSON.
+                    # This is likely the cause of the "huge summary" issue.
+                    # We'll return a clear error message instead.
+                    return {"error": f"The AI failed to generate a summary in the correct format. The raw response could not be parsed: {e}"}
+
             else:
-                return {"error": "Could not generate a summary. The model response was empty or malformed."}
+                return {"error": "The AI could not generate a summary. The model response was empty or malformed."}
         
         except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
             if i < retry_count - 1:
@@ -458,7 +466,7 @@ if 'scanner_df' in st.session_state and not st.session_state['scanner_df'].empty
 
                 Please provide a response in JSON format only, with the following schema:
                 {{
-                    "summary": "A brief, one-paragraph overview of the stock's performance.",
+                    "summary": "A brief, one-paragraph overview of the stock's performance. KEEP THE SUMMARY CONCISE.",
                     "key_points": [
                         "A bullet point describing the MA50 trend.",
                         "A bullet point describing the RSI momentum.",
@@ -473,6 +481,7 @@ if 'scanner_df' in st.session_state and not st.session_state['scanner_df'].empty
                 - RSI Score (momentum): {selected_row['RSI Score']:.2f} (from -1 to 1)
                 - Volume Score (volume strength): {selected_row['Volume Score']:.2f} (from -1 to 1)
 
+                Strictly follow the JSON schema and provide a concise summary.
                 Do not include any other text or markdown.
                 """
                 with st.spinner("Generating summary and visuals..."):
@@ -554,4 +563,3 @@ if 'scanner_df' in st.session_state and not st.session_state['scanner_df'].empty
         )
         fig.update_layout(xaxis={'categoryorder':'total descending'})
         st.plotly_chart(fig, use_container_width=True)
-
