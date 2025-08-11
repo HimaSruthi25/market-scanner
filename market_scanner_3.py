@@ -23,7 +23,7 @@ import time
 
 # NOTE: The API key for the Gemini API is intentionally left as an empty string.
 # The Canvas environment will automatically handle the API key for the fetch call.
-API_KEY = ""
+API_KEY = "AIzaSyChisj-FzBOwejY0aVd8cSlF8mPSTBaC9Y"
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent"
 
 # --- Streamlit App Configuration with Layout Fixes ---
@@ -554,3 +554,4 @@ if 'scanner_df' in st.session_state and not st.session_state['scanner_df'].empty
         )
         fig.update_layout(xaxis={'categoryorder':'total descending'})
         st.plotly_chart(fig, use_container_width=True)
+
