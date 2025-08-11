@@ -272,7 +272,7 @@ with left_column:
             selected_names = st.multiselect(
                 "Select Stocks",
                 options=master_names,
-                default=[ticker_to_name[t] for t in dow30_tickers[:10]]  # Default first 10 Dow stocks
+                default=[]  # Default first 10 Dow stocks
             )
             selected_tickers = [name_to_ticker[name] for name in selected_names]
 
@@ -370,7 +370,8 @@ with right_column:
                 'Final Score': '{:.2f}'
             }).bar(subset=['Final Score'], color=['#e53e3e', '#38b2ac']),
             use_container_width=True,
-            height=600
+            hide_index=True,
+            height=min(500, 60 + len(scanner_df) * 35)
         )
 
         # Final Score Bar Chart
@@ -395,5 +396,6 @@ with right_column:
                 format_func=lambda x: ticker_to_name[x]
             )
             if selected_raw_ticker in data.columns:
+
 
                 st.dataframe(data[selected_raw_ticker].tail(10))
