@@ -295,9 +295,9 @@ all_tickers_to_fetch = list(set(nifty100_tickers + st.session_state.get('custom_
 master_data = pd.DataFrame()
 force_data_refresh = False
 
-def is_market_open():
+
 # --- Shortcut to simulate market open and force scanning on cached data ---
- simulate_market_open = st.sidebar.checkbox("Simulate Market Open for Testing", value=False)
+simulate_market_open = st.sidebar.checkbox("Simulate Market Open for Testing", value=False)
 
 def is_market_open():
     if simulate_market_open:
@@ -576,3 +576,4 @@ SCANNERS = {
         'description': 'Stocks with a recent bullish crossover above the 200-day EMA, signaling a long-term trend change.'
     },
 }
+
